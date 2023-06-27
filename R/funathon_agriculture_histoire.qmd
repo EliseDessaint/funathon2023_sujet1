@@ -116,7 +116,8 @@ Vous vérifierez que :
 - total_des_terres_labourables +  prairies_naturelles + vignes + autres_cultures_arborescentes + paturages + autres_surfaces_ecoumene = superficie_totale     
 
 ```{r}
-#| verif totaux
+#| label: verif_mon_canton
+#| warning: false
 
 verif_totaux <- mon_canton %>%
   pivot_wider() %>% 
@@ -153,9 +154,9 @@ Là vous faites une recherche par code postal et regardez le résultat dans la f
 Puis vous faites une recherche par nom et regardez le résultat dans la fenêtre. C'est ce service que nous utiliserons car dans le jeu de données nous avons le nom des villes.  
 Vous pouvez copier la ligne de commande générée car nous en aurons besoin plus tard. Elle ressemble à 
 ```
-curl 'https://geo.api.gouv.fr/communes?nom=Toulouse&fields=departement&boost=population&limit=5' 
+curl 'https://geo.api.gouv.fr/communes?nom=Wasquehal&fields=departement&boost=population&limit=5'
 ```
-
+curl 'https://geo.api.gouv.fr/communes?nom=Lille'
 #### Tester l'API dans un Terminal
 
 Dans Rstudio, vous allez dans l'onglet Terminal et vous coller la ligne de commande copié précédemment.   
@@ -165,7 +166,7 @@ Astuce : pour coller dans un terminal le "CTRL + V" ne fonctionne pas. Il faut f
 Par exemple : 
 
 ```
-curl "https://geo.api.gouv.fr/communes?nom=Toulouse"
+curl "https://geo.api.gouv.fr/communes?nom=Lille"
 ```
 Qu'est ce qui se passe ?   
 
@@ -181,7 +182,7 @@ Vous constatez que l'API nous donne des informations formatées de manière peu 
 - population : 493465      
 - _score : 1     
 
-On est content d'avoir des informations sur Toulouse. Mais nous constatons que nous avons également des informations sur d'autres villes qui ont Toulouse dans leur nom comme Toulouse-Le-Château et Vieille-Toulouse.   
+On est content d'avoir des informations sur Lille. Mais nous constatons que nous avons également des informations sur d'autres villes qui ont Lille dans leur nom comme Saint-André-les-Lille...   
 Nous constatons également que nous ne récupérons pas les coordonnées du centroid de la Ville. Il nous faudra l'ajouter dans la requête.   
 Nous voyons également une variable qui s'appelle "_score". Cette variable nous sera très utile pour la suite.
 
@@ -191,7 +192,7 @@ On va dans un premier temps ajouter le code du département car nous l'avons dan
 
 ```
 Toujours dans le terminal :
-curl "https://geo.api.gouv.fr/communes?nom=Toulouse&codeDepartement=31"
+curl "https://geo.api.gouv.fr/communes?nom=Lille&codeDepartement=59"
 ```
 
 En sortie, on a moins de propositions mais toujours trop. 
@@ -204,13 +205,14 @@ Et pour avoir les coordonnées du centre la vill, on ajoute : fields=centre
 ```
 Toujours dans le terminal :
 
-curl "https://geo.api.gouv.fr/communes?nom=Toulouse&codeDepartement=31&fields=centre&boost=population&limit=1"
+curl "https://geo.api.gouv.fr/communes?nom=Lille&codeDepartement=59&fields=centre&boost=population&limit=1"
 ```
 
-On obtient bien les coordonnées du centre de Toulouse : "coordinates":[1.4328,43.6007].
+On obtient bien les coordonnées du centre de Lille : "coordinates":[3.0469,50.6311].
+Attention : les coordonnées données envoyées par le terminal via API sont inversées !!!
 
 Pour vérifier on peut utiliser google maps, en mettant directement les coordonnées dans l'url après le @ : 
-[https://www.google.fr/maps/@43.6007,1.4328,13.5z](https://www.google.fr/maps/@43.6007,1.4328,13.5z) (le 13.5z est le zoom)
+[https://www.google.fr/maps/@3.0469,50.6311.5z](https://www.google.fr/maps/@50.6311,3.0469.13z) (le 13.5z est le zoom)
 
 #### Interroger l'api : geo.api.gouv.fr sous R
 
@@ -225,11 +227,14 @@ Il y a plusieurs possibilités, ici on va utiliser le package *jsonlite :*
 #Sachant que l'on va devoir ensuite faire la requête pour tous les chefs-lieu de canton, on propose une requête type avec 2 champs à completer. Les champs à compléter sont %s
 url = "https://geo.api.gouv.fr/communes?nom=%s&codeDepartement=%s&fields=centre&boost=population&limit=1"
 
+#sans les départments :
+url = "https://geo.api.gouv.fr/communes?nom=%s&fields=centre&boost=population&limit=1"  
+
 # On utilise la fonction sprintf qui prend une chaine de caractères 'url' et qui va remplacer les %s par les paramètres passées ensuite dans l'ordre. Le premier %s est remplacé par "Toulouse), le second par "31"
-url_completed <- sprintf(url, "Toulouse", "31")
+url_completed <- sprintf(url, "liste_canton")
 
 # on interroge l'API qui est renvoit un JSON qui est convertie en dataframe grâce à la fonction fromJSON
-resultat <-  fromJSON(url_completed)
+resultat_test <-  fromJSON(url_completed)
 print(resultat)
 print(resultat$centre)
 ```
@@ -248,12 +253,56 @@ Votre travail consiste à rajouter 2 colonnes, le nom et les coordonnées du cen
 #| warning: false
 #| echo: true
 
+table_departement1852<-surfaces_ra1852 %>% 
+  filter(is.na(departement)==TRUE) %>% 
+  mutate(codeNew=code/10, #pour enlever le zero de la fin (car format numérique)
+         codeNew1=as.character(codeNew), #transforme en caractère pour appliquer les fonctions str
+         codeNew2=str_pad(codeNew1, 2,pad="0",side="left")) %>% 
+  select(DEP=codeNew2, DEP_LIB=canton)
+  
+#jointure pour récupérer les codes départements
+table_canton1852<-surfaces_ra1852 %>% 
+  filter(is.na(departement)==FALSE) %>% 
+  left_join(table_departement1852, by = c("departement"="DEP_LIB")) %>% 
+  mutate(CANTON = str_replace_all(canton, " ", "-")) #on remplace les blancs par des tirets
 
-##################################################################################################################### 
-##################################################################################################################### 
-####################################### A COMPLETER    #####################################################
-##################################################################################################################### 
-#####################################################################################################################
+liste_canton<-table_canton1852 %>% pull(CANTON)
+
+### Fonction pour trouver le centre
+trouver_centre <- function(url, lib_canton, code_dep){
+ 
+  url_completed <- sprintf(url, lib_canton, code_dep)
+  resultat <-  fromJSON(url_completed)
+  if(length(resultat) > 0){
+    return(resultat$centre$coordinates[1])
+  }else{
+    return(NA)
+  }
+
+}
+
+url_api = "https://geo.api.gouv.fr/communes?nom=%s&codeDepartement=%s&fields=centre&boost=population&limit=1"
+
+### Création du dataframe
+surfaces_ra1852_coordonnees_centre <- table_canton1852 %>%
+  rowwise() %>%
+  mutate(centre = trouver_centre(
+    url = url_api,
+    lib_canton = CANTON,
+    code_dep = DEP
+  )) %>%
+  ungroup()
+
+### Remplacement des cases en NULL en NA
+surfaces_ra1852_coordonnees_centre$centre[surfaces_ra1852_coordonnees_centre$centre == "NULL"] <- NA
+
+#Sachant que l'on va devoir ensuite faire la requête pour tous les chefs-lieu de canton, on propose une requête type avec 2 champs à completer. Les champs à compléter sont %s
+url_api = "https://geo.api.gouv.fr/communes?nom=%s&codeDepartement=%s&fields=centre&boost=population&limit=1"
+
+
+  
+
+
 
 
 ```
