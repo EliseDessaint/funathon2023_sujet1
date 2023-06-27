@@ -47,6 +47,7 @@ En haut à droite de chaque chunk vous avez 2 boutons. Le premier permet de rejo
 
 Nous vous proposons de travailler dans les chunks proposés et d'en créer d'autres à votre guise. Attention chaque chunk doit avoir un nom unique. Pensez à faire régulièrement un *Render* afin de vous assurer que votre code complet compile bien.  
 
+
 ## Configuration de notre script
 
 La première étape en Quarto est de créer un *chunk* de setup où l'on appelle les librairies utiles et les éventuelles options. Si jamais des librairies utilisées ici ne sont pas installées dans votre instance de R, nous vous recommandons de les installer dès à présent.
@@ -101,18 +102,30 @@ Pour s'amuser avec les données, afficher le tableau des surfaces de votre canto
 #| warning: false
 
 mon_canton <- surfaces_ra1852 %>% 
-  filter(canton == "TOULOUSE") %>% ### Changer ici avec votre canton
-  pivot_longer(-c(code, canton, departement)) %>% 
+  filter(canton == "LILLE") %>% ### Changer ici avec votre canton
+  pivot_longer(-c(code, canton, departement)) %>% ### synthaxe - le vecteur des champs qu'on ne veut pas permutter
   select(-c(code, canton, departement)) %>% 
   print()
 ```
 
-Alors quelle est le type de terre labourable la plus étendue ? Chez nous ce sont les céréales.   
-Avez-vous un peu de vigne ?
+Alors quelle est le type de terre labourable la plus étendue ? A Lille, ce sont les céréales.  (mais avec quand-même 12 000 ha de prairies à l'époque !) 
+Avez-vous un peu de vigne ? NON (snif)
 
 Vous vérifierez que :     
 - cereales + racines_et_legumes_divers + cultures_diverses + prairies_artificielles + jacheres = total_des_terres_labourables      
 - total_des_terres_labourables +  prairies_naturelles + vignes + autres_cultures_arborescentes + paturages + autres_surfaces_ecoumene = superficie_totale     
+
+```{r}
+#| verif totaux
+
+verif_totaux <- mon_canton %>%
+  pivot_wider() %>% 
+  mutate(TOTAL_TL = sum(cereales,racines_et_legumes_divers, cultures_diverses, prairies_artificielles, jacheres) ,
+         ECART_TL=TOTAL_TL-total_des_terres_labourables) %>% 
+    mutate(ECART_TOT = superficie_totale -(total_des_terres_labourables +  prairies_naturelles + vignes + autres_cultures_arborescentes + paturages + autres_surfaces_ecoumene  ))
+  
+  
+```
 
 
 ## 2 - Trouver les coordonnées géographiques des chefs-lieux de canton (utilisation d'une API)
