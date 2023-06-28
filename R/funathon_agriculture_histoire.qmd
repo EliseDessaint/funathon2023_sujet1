@@ -1,4 +1,4 @@
-Elise - 27 juin 2023 ---test push et commit 
+Elise - 27 juin 2023 ---journée 2 
 title: "Agriculture, 170 ans d'histoire"
 subtitle: "Produire un fond cartographique à l'aide de données historiques"
 format: 
@@ -359,7 +359,7 @@ surfaces_ra1852_coordonnees_centre_corrigees <- surfaces_ra1852_coordonnees_cent
   )
 
 ```
-```
+
 
 
 #### Créer les colonnes latitude et longitude à partir de la colonne centre
@@ -370,13 +370,26 @@ Il ne vous reste plus qu'à séparer la colonne centre pour avoir la latitude et
 #| label: creation_lat_log
 #| warning: false
 #| echo: true
+#nettoyage des coordonnées géo X et Y, puis séparation en deux champs
+
+tableRA1852_latlong <-surfaces_ra1852_coordonnees_centre_corrigees %>%
+  mutate(centre = as.character(centre)) %>% 
+  mutate(COORDO = str_replace_all(centre, "c", "")) %>%#on remplace les c( et ) par rien
+  mutate(COORDO=str_replace_all(COORDO, "[)]", "")) %>% #ATTENTION : les parenthèses doivent être entre crochets sinon erreur
+  mutate(COORDO=str_replace_all(COORDO, "[(]", "")) %>% 
+  mutate(latitude=str_split_fixed(COORDO, ",",2)[,1]) %>%  #la fonction str_plit_fixed permet de séparer une colonne en "2" à partir du caractère ",". le [,1] permet de lui préciser quelle est la colonne qu'il doit retenir pour la latitude
+  mutate(longitude=str_split_fixed(COORDO, ",",2)[,2]) #idem ici avec la 2eme colonne
 
 
-##################################################################################################################### 
-##################################################################################################################### 
-####################################### A COMPLETER    #####################################################
-##################################################################################################################### 
-#####################################################################################################################
+
+
+
+
+
+
+
+
+
 
 ```
 
@@ -393,7 +406,7 @@ Si vous ne savez pas comment faire, vous pouvez utiliser leaflet avec des marker
 #| warning: false
 #| echo: true
 
-
+#dfj
 ##################################################################################################################### 
 ##################################################################################################################### 
 ####################################### A COMPLETER    #####################################################
