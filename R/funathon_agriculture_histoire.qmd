@@ -261,12 +261,19 @@ table_departement1852<-surfaces_ra1852 %>%
   select(DEP=codeNew2, DEP_LIB=canton)
   
 #jointure pour récupérer les codes départements
+
 table_canton1852<-surfaces_ra1852 %>% 
   filter(is.na(departement)==FALSE) %>% 
   left_join(table_departement1852, by = c("departement"="DEP_LIB")) %>% 
   mutate(CANTON = str_replace_all(canton, " ", "-")) #on remplace les blancs par des tirets
 
 liste_canton<-table_canton1852 %>% pull(CANTON)
+
+#stats RA1852 région HDF
+
+RA1952_HDF <-table_canton1852 %>% 
+  filter(DEP %in%c("02","59","62","80","60")) %>% 
+  summarise(SAU_TOT=sum(superficie_totale))
 
 ### Fonction pour trouver le centre
 trouver_centre <- function(url, lib_canton, code_dep){
@@ -377,8 +384,10 @@ tableRA1852_latlong <-surfaces_ra1852_coordonnees_centre_corrigees %>%
   mutate(COORDO = str_replace_all(centre, "c", "")) %>%#on remplace les c( et ) par rien
   mutate(COORDO=str_replace_all(COORDO, "[)]", "")) %>% #ATTENTION : les parenthèses doivent être entre crochets sinon erreur
   mutate(COORDO=str_replace_all(COORDO, "[(]", "")) %>% 
-  mutate(latitude=str_split_fixed(COORDO, ",",2)[,1]) %>%  #la fonction str_plit_fixed permet de séparer une colonne en "2" à partir du caractère ",". le [,1] permet de lui préciser quelle est la colonne qu'il doit retenir pour la latitude
-  mutate(longitude=str_split_fixed(COORDO, ",",2)[,2]) #idem ici avec la 2eme colonne
+  mutate(longitude=str_split_fixed(COORDO, ",",2)[,1]) %>%  #la fonction str_plit_fixed permet de séparer une colonne en "2" à partir du caractère ",". le [,1] permet de lui préciser quelle est la colonne qu'il doit retenir pour la latitude
+  mutate(latitude=str_split_fixed(COORDO, ",",2)[,2]) %>%  #idem ici avec la 2eme colonne
+  mutate(longitude=as.numeric(longitude)) %>% 
+  mutate(latitude=as.numeric(latitude))
 
 
 
@@ -399,6 +408,7 @@ Pour vérifier le résultat de notre travail, et pour vérifier également la r�
 Utilisez la méthode que vous préférez.   
 
 Si vous ne savez pas comment faire, vous pouvez utiliser leaflet avec des markers. La librairie leaflet a été chargée dans le chunk de setup. Il ne vous reste plus qu'à créer le code en vous inspirant de l'aide de leaflet : [Aide Leaflet](https://rstudio.github.io/leaflet/markers.html)
+autre doc Leaflet en français : https://lrouviere.github.io/TUTO_R/leaflet.html
 
 
 ```{r}
@@ -406,12 +416,12 @@ Si vous ne savez pas comment faire, vous pouvez utiliser leaflet avec des marker
 #| warning: false
 #| echo: true
 
-#dfj
-##################################################################################################################### 
-##################################################################################################################### 
-####################################### A COMPLETER    #####################################################
-##################################################################################################################### 
-#####################################################################################################################
+leaflet(data = tableRA1852_latlong) %>% #transforme la table en objet geographique
+  addTiles() %>% #ajoute le fond de carte openstreetmap (par défaut)
+  addMarkers(lng = ~longitude, #lng transforme la donnée en longitude pour geolocaliser
+             lat = ~latitude, #lng transforme la donnée en latitude pour geolocaliser
+             popup = ~canton, #champ que tu veux representer dans la fenetre pop-up
+             label = ~canton) #étiquette que tu veux mettre dans la carte
 
 ```
 
@@ -450,24 +460,24 @@ Nous vous proposons de jouer avec les Voronoi sur ce site : [Jeu sur les voronoi
 
 
 # pour travailler sur des aspects géographiques dont les voronoi il faut passer du dataframe au géo dataframe
-# surfaces_ra1852_geo <-
-#   st_as_sf(
-#     surfaces_ra1852_final %>% drop_na(c(longitude, latitude)),
-#     coords = c("longitude", "latitude"),
-#     crs = 4326
-#   )
-# 
-# # on charge la projection pour le mettre en Lambert-93
-# surfaces_ra1852_geo <- st_transform(surfaces_ra1852_geo, crs = 2154) 
-# 
-# # On utilise les fonctions de sf
-# voronoi_surfaces_ra1852 <- surfaces_ra1852_geo %>%
-#   st_union() %>% ## permet de passer une simple à un seul objet géométrique avec tous les points
-#   st_voronoi() %>% ## calcul du voronoi
-#   st_collection_extract()  ## extraction en une liste avec les 363 figures géométriques
-# 
-# # Visualisation simple
-# plot(voronoi_surfaces_ra1852)
+surfaces_ra1852_geo <- st_as_sf(tableRA1852_latlong %>% 
+                                drop_na(c(longitude, latitude)),
+                                coords = c("longitude", "latitude"),
+                                crs = 4326) #4326 ça doit certainement correspondre à la projection utilisée dans l'API /openStreetMap
+##WGS84 (EPSG 4326) : OpenStreetMap uses the WGS84 spatial reference system used by the Global Positioning System (GPS). It uses geographic coordinates between -180° and 180° longitude and -90° and 90° latitude. So this is the "native" OSM format.
+## Les coordonnées GeoJson issues de l'API sont bien en WGS84 (EPSG4326)
+## on charge la projection pour le mettre en Lambert-93
+surfaces_ra1852_geo <- st_transform(surfaces_ra1852_geo, crs = 2154) 
+
+## On utilise les fonctions de sf
+voronoi_surfaces_ra1852 <- surfaces_ra1852_geo %>%
+st_union() %>% 
+  ## permet de passer une simple à un seul objet géométrique avec tous les points
+st_voronoi() %>% ## calcul du voronoi
+st_collection_extract()  ## extraction en une liste avec les 363 figures géométriques
+
+# Visualisation simple
+plot(voronoi_surfaces_ra1852)
 ```
 
 ### Amélioration du découpage géographique
@@ -481,6 +491,25 @@ Dans le graphique généré dans le précédent chunk, on reconnait la France en
 #| label: amelioration_pavage_voronoi
 #| warning: false
 #| echo: true
+
+### ouverture de la couche des departements (téléchargées en format JSON de data.gouv)
+dep <- sf::read_sf(here('data/dep2021_simplify2.json'), crs=2154) 
+### enlever outre-mer
+dep_metro <- dep %>% 
+  rowwise() %>% 
+  filter(nchar(dep)==2) %>% #car DOM sont à 3 chiffres
+  ungroup()
+
+### ne garder que les coutours de la France et les fusionner
+dep_union <- st_union(dep_metro)
+plot(dep_union)
+
+### ne garder les voronoi uniquement qui sont en intersection avec les contours de la France
+voronoi_surfaces_ra1852 = st_intersection(voronoi_surfaces_ra1852, dep_union)
+plot(voronoi_surfaces_ra1852)
+
+
+
 
 
 ```
@@ -500,11 +529,23 @@ A vous de jouer.
 #| warning: false
 #| echo: true
 
-##################################################################################################################### 
-##################################################################################################################### 
-####################################### A COMPLETER    #####################################################
-##################################################################################################################### 
-#####################################################################################################################
+# un peu de manipulation pour créer la table : cf l'aide de st_as_sf
+data_voronoi <- data.frame(id = 1:length(voronoi_surfaces_ra1852))# pour attribuer un n°identifiant en 2 temps avec un cbind qui colle les colonnes
+data_voronoi <- data_voronoi %>% 
+  cbind(voronoi_surfaces_ra1852)
+data_voronoi <- st_as_sf(data_voronoi)
+
+# correction point de calvi qui est hors de la carte si st_join.
+new_calvi <- st_point(c(1180000, 6180000))
+surfaces_ra1852_geo$geometry[surfaces_ra1852_geo$canton == "CALVI"] = new_calvi
+
+# Je créé la jointure entre mes points et mes polygons voronoi
+voronoi_surfaces_final <- data_voronoi %>% 
+  st_join(surfaces_ra1852_geo)
+
+plot(voronoi_surfaces_final)
+
+write_csv2(x = voronoi_surfaces_final, file = here("data/correction_dataframe_intermerdiaire/voronoi_surfaces_final.csv"))
 
 
 voronoi_surfaces_final <- read.csv2(here("data/correction_dataframe_intermerdiaire/voronoi_surfaces_final.csv"))
@@ -541,11 +582,15 @@ Pour apprendre à faire des cartes en R, vous pouvez consulter le site :
 #| warning: false
 #| echo: true
 
-##################################################################################################################### 
-##################################################################################################################### 
-####################################### A COMPLETER    #####################################################
-##################################################################################################################### 
-#####################################################################################################################
+### avec ggplot
+carto_terres_labourables_par_canton <- voronoi_surfaces_final %>% 
+  mutate(part_labourable = round(100 * total_des_terres_labourables/superficie_totale, -1)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = part_labourable),color="grey",size=.2)+
+  scale_fill_gradient(name = "Part des terres\nlabourables en % \nde la surface totale", limits = c(0, 100), 
+    low = "white", high = "forestgreen") +
+  theme_map()
+carto_terres_labourables_par_canton
 
 ```
 
